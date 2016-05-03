@@ -37,23 +37,51 @@ contains
             cv_A%theta_cov_form     = 0	     !Form of theta covariance:  [0] none, [1] diag, [2] full matrix
             cv_A%Q_compression_flag = 0      ! [0] none - calculate full Q0, [1] Calculate Q0 for each beta
             cv_A%deriv_mode         = 0      ! [0] use external PEST for Jacobian, [1] look for separate dercomline, [4] is parallel with Condor
-            cv_A%post_cov_flag      = 0      ! [0] do not calculate posterior covariance [1] calculate post cov
+            cv_A%post_cov_flag      = 1      ! [0] do not calculate posterior covariance [1] calculate post cov
             cv_A%jacobian_format    = 'binary' ! 'binary' [default] means read JCO binary, 'ascii' means read standard PEST text matrix
             cv_A%jacfle             = 'scratch.jco' ! filename for external derivatives to be read from
             cv_A%par_anisotropy     = 0      ! flag for whether anisotropy block will be read [0]=no, [1] = yes
+            
+            !Initial values for PCGA:
+            cv_A%PCGA              = 0      !PCGA is per default not used
+            cv_A%non_complete_grid = 0      !A non-regular grid is per default not used
+            cv_A%posterior_cov_compression_flag = 1  !Compress the posterior covariance matrix
+            cv_A%Nthread           = 0      !Number of threads used in multi threading
+            cv_A%LM                = 0      !Levenberg-Marquardt is per default not used
+            cv_A%LM_lambda         = 50.0   !Levenberg-Marquardt default start value
+            cv_A%LM_down           = 2.0    !Levenberg-Marquardt step down value
+            cv_A%LM_up             = 2.0    !Levenberg-Marquardt step up value
+            cv_A%LM_min            = 1.0e-1 !Value of lambda for deactivating Levenberg-Marquardt
+            cv_A%LM_max            = 1.0e3  !Maximum value for lambda in Levenberg-Marquardt
+            cv_A%LM_max_it         = 10     !Maximum number of iterations using Levenberg-Marquardt
+            cv_A%method_Gaussian   = 0      !Gaussian sample generation methods, however the value zero indicate that no random samples are used. Instead an identity matrix is used instead of the samples.
+            cv_A%seed_Gaussian     = 123    !Default seed value for random sampling. This value will always give the same random samples
+            cv_A%brng_Gaussian     = 1      !Initialize stream in VLS
+            cv_A%deriv_type        = 1      !Derivative type for matrix free approach: Forward difference
+            cv_A%deriv_accuracy    = 1      !Using first order forward difference
+            cv_A%derivative_test   = 0      !Test of the derivative is per default not used
+            cv_A%derivative_test_min = -2.0 !Original exponent plus this factor for the start of the derivative test
+            cv_A%derivative_test_max =  2.0 !Original exponent plus this factor for the  end  of the derivative test
+            cv_A%derivative_test_step = 1.0 !Stepsize between exponents in derivative test
+            cv_A%eigenvalue_test = 0        !Parameter for testing the eigenvalues of the covariance matrix. Per default not active.
+
             BL(1)%label           = 'algorithmic_cv'
             BL(1)%numrows         = UNINIT_INT
-            BL(1)%numkw           = 16 
+            BL(1)%numkw           = 37 !16 before PCGA
             allocate (BL(1)%keywords(BL(1)%numkw))
 
-            BL(1)%keywords = (/'structural_conv','phi_conv','bga_conv',   &
-            & 'it_max_structural','it_max_phi','it_max_bga','linesearch', &
-            & 'it_max_linesearch', 'theta_cov_form',                      &
-            & 'Q_compression_flag', 'store_Q', 'posterior_cov_flag',      &
-            & 'deriv_mode','jacobian_format','jacobian_file','par_anisotropy'/)   
+            BL(1)%keywords = (/'structural_conv','phi_conv','bga_conv',          &
+            & 'it_max_structural','it_max_phi','it_max_bga','linesearch',        &
+            & 'it_max_linesearch', 'theta_cov_form',                             &
+            & 'Q_compression_flag', 'store_Q', 'posterior_cov_flag',             &
+            & 'deriv_mode','jacobian_format','jacobian_file','par_anisotropy',   &
+            & 'PCGA','non_complete_grid','LM','LM_lambda','LM_down','LM_up',     & !PCGA
+            & 'LM_min','LM_max','LM_max_it','method_Gaussian','seed_Gaussian',   & !PCGA
+            & 'brng_Gaussian','deriv_type','deriv_accuracy','derivative_test',   & !PCGA
+            & 'derivative_test_min','derivative_test_max','derivative_test_step',& !PCGA
+            & 'eigenvalue_test','posterior_cov_compression_flag','Nthread' /)      !PCGA
        end subroutine bpi_init_algorithmic_CVs  
-        
-       
+
 !********  subroutine bpi_init_prior_mean_CVs
        subroutine bpi_init_prior_mean_CVs(BL,cv_PM)
        ! SUBROUTINE to initialze algorithmic control variables
@@ -231,6 +259,7 @@ contains
             nullify(d_OBS%group)
             nullify(d_OBS%obs)
             nullify(d_OBS%h)
+            nullify(d_OBS%h_perturbed) !PCGA
             nullify(d_OBS%weight)
             nullify(d_OBS%obsnme)
             bl(13)%label           = 'observation_data'
@@ -295,11 +324,12 @@ contains
         
         
 !*********  subroutine bpi_init_algorithmic_DATA(d_A,npar,nobs)
-       subroutine bpi_init_algorithmic_DATA(d_A,npar,nobs)      
+       subroutine bpi_init_algorithmic_DATA(cv_A, d_A,npar,nobs)      
        !SUBROUTINE to initialize receptacle for the Jacobian (H)
        use bayes_pest_control
        !DECLARATIONS
        implicit none
+       type(cv_algorithmic),intent(in)      :: cv_A
        type(d_algorithmic), intent(inout)   :: d_A
        integer, intent(in)                  :: npar, nobs
        ! INITIALIZATIONS
@@ -311,7 +341,9 @@ contains
        nullify(d_A%Qyy)
        nullify(d_A%beta_hat)
        nullify(d_A%ksi)
-       allocate(d_A%H(nobs,npar))
+       if (cv_A%PCGA == 0) then
+        allocate(d_A%H(nobs,npar)) !The full Jacobian, H, is not used in PCGA.
+       endif
        d_A%H    = UNINIT_REAL  ! matrix         
        end subroutine  bpi_init_algorithmic_DATA               
    

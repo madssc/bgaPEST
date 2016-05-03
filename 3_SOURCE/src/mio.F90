@@ -1,5 +1,3 @@
-
-
 module model_input_output
 
 ! -- Modules which are USED by this module are defined.
@@ -102,6 +100,7 @@ module model_input_output
 
 ! -- Global data types are declared.
 
+      !MC: The compiler is not happy with double declaration of iso. The problem can be solved by Property>Fortran>Preprocessor>Preprocess Source file: Yes (/fpp)
 #ifdef UNIX
       integer                            :: ios=1      ! operating system
 #else
@@ -124,6 +123,8 @@ module model_input_output
       character (len=100)                :: function_name
 
 
+    
+    
 ! -- FUNCTIONS
 
 ! -- Visible functions
@@ -159,7 +160,9 @@ module model_input_output
              mio_observation_check
 
       public mio_process_template_files,            &
-             mio_write_model_input_files
+             mio_write_model_input_files,           &
+             mio_get_numinfile,                     &
+             mio_write_model_input_files_mult_delta
 
       public mio_store_instruction_set,             &
              mio_delete_model_output_files,         &
@@ -167,8 +170,8 @@ module model_input_output
 
       public mio_finalise
 
-contains
-
+    
+    contains
 
 
 integer function mio_initialise(estruc,mstruc)
@@ -376,7 +379,7 @@ integer function mio_initialise_parameters(estruc,mstruc,npar)
 
         implicit none
       
-        type(err_failure_struc), intent(inout)   :: estruc     ! for error messages
+        type(err_failure_struc), intent(inout)   :: estruc     ! for error messagesmstruc%pword
         type(mio_struc), intent(inout)           :: mstruc     ! structure holding current mio dataset
         integer, intent(in)                      :: npar       ! number of parameters
 
@@ -399,7 +402,7 @@ integer function mio_initialise_parameters(estruc,mstruc,npar)
           go to 9900
         endif
         mstruc%npar=npar
-
+        
         allocate(mstruc%nw(npar),mstruc%pword(npar),mstruc%apar(npar),stat=ierr)
         if(ierr.ne.0) go to 9200
         mstruc%nw=0        ! an array
@@ -1443,15 +1446,15 @@ integer function mio_write_model_input_files(estruc,mstruc,pval)
             ifail=1
             go to 9900
           else if (jfail.eq.1)then
-            write(amessage,11) trim(errsub),trim(mstruc%apar(ipp))
+            write(amessage,11) trim(errsub),trim(mstruc%apar(ipp)), pval(ipp)
 11          format(a,' exponent of parameter "',a,'" is too large or too small for ', &
-            'single precision protocol.')
+            'single precision protocol. The value is:',ES11.4)
             ifail=1
             go to 9900
           else if (jfail.eq.2)then
-            write(amessage,12) trim(errsub),trim(mstruc%apar(ipp))
+            write(amessage,12) trim(errsub),trim(mstruc%apar(ipp)), pval(ipp)
 12          format(a,' exponent of parameter "',a,'" is too large or too small for ', &
-            'double precision protocol.')
+            'double precision protocol. The value is:',ES11.4)
             ifail=1
             go to 9900
           else if (jfail.eq.3)then
@@ -1552,6 +1555,200 @@ integer function mio_write_model_input_files(estruc,mstruc,pval)
 
 end function mio_write_model_input_files
 
+
+integer function mio_get_numinfile(mstruc)
+        implicit none
+        type(mio_struc), intent(inout)  :: mstruc
+
+        mio_get_numinfile = mstruc%numinfile !since all mio is private
+        return
+        
+end function mio_get_numinfile
+
+!Introduced for PCGA. It is a copy of mio_write_model_input_files with minor changes.
+integer function mio_write_model_input_files_mult_delta(estruc,mstruc,pval,numinfile)
+
+! -- Function MIO_WRITE_MODEL_INPUT_FILES_MULT_DELTA writes model input files based on a set of model
+!    input template files and a set of current parameter values.
+
+        implicit none
+        
+        type(err_failure_struc),    intent(inout)               :: estruc
+        type(mio_struc),            intent(inout)               :: mstruc
+        double precision,           intent(inout), dimension(:) :: pval
+        integer,                    intent(in)                  :: numinfile
+
+        integer             :: ipar,ipp,jfail,ifile,iunit,iunit1,iline,lc,j1,j2,j,idir,n,reopen,lopen,ipp2
+        double precision    :: tval
+        character (len=1)   :: aa
+        character (len=12)  :: tpar
+        character (len=256) :: mifile
+        
+        function_name='MIO_WRITE_MODEL_INPUT_FILES_MULT_DELTA'
+        mstruc%ic_write_model_input_files=mstruc%ic_write_model_input_files+1 !Count of number of times it has written
+        errsub='Error in function '//trim(function_name)//':'
+        ifail=0
+
+! -- Preliminary checking is undertaken.
+
+        if(mstruc%ic_process_template_files.eq.0)then
+          write(amessage,103) trim(errsub)
+103       format(a,' this function must not be called unless function MIO_PROCESS_TEMPLATE_FILES ',  &
+          'has been called previously.')
+          ifail=1
+          go to 9900
+        endif
+
+        if(size(pval).lt.mstruc%npar)then
+          write(amessage,105) trim(errsub)
+105       format(a,' size of PVAL array supplied to function MIO_WRITE_MODEL_INPUT_FILES_MULT_DELTA is insufficient.')
+          ifail=1
+          go to 9900
+        endif
+
+! -- The writing is now actually done.
+
+        errsub='Error writing parameter values to model input files:'
+        idir=0
+        if(mstruc%workdir.ne.' ') idir=1
+
+! -- Each of the parameter words is filled.
+        
+        ipar=1
+        do 111 ipp=1,mstruc%npar
+          call mio_wrtsig(jfail,pval(ipp),mstruc%pword(ipp),mstruc%nw(ipp),mstruc%precis,tval,mstruc%nopnt) !Write a number into space with a specific precision
+          if(jfail.lt.0)then !error messages
+            write(amessage,106) trim(errsub),trim(mstruc%apar(ipp))
+106         format(a,' internal error condition has arisen while attempting to write ', &
+            'current value of parameter "',a,'" to model input file.')
+            ifail=1
+            go to 9900
+          else if (jfail.eq.1)then
+            write(amessage,107) trim(errsub),trim(mstruc%apar(ipp)),pval(ipp)
+107          format(a,' exponent of parameter "',a,'" is too large or too small for ', &
+            'single precision protocol. The value is:',ES11.4)
+            ifail=1
+            go to 9900
+          else if (jfail.eq.2)then
+            write(amessage,108) trim(errsub),trim(mstruc%apar(ipp)),pval(ipp)
+108         format(a,' exponent of parameter "',a,'" is too large or too small for ', &
+            'double precision protocol. The value is:',ES11.4)
+            ifail=1
+            go to 9900
+          else if (jfail.eq.3)then
+            write(amessage,109) trim(errsub),trim(mstruc%apar(ipp))
+109         format(a,' field width of parameter "',a,'" on at least one template file ', &
+            'is too small to represent current parameter value. The number is too large ', &
+            'to fit, or too small to be represented with any precision.')
+            ifail=1
+            go to 9900
+          endif
+          pval(ipp)=tval
+111     continue
+
+! -- Next the substitutions in the template files are made.
+
+        do 112 ifile=numinfile, numinfile !only this numinfile
+          call utl_addquote(mstruc%tempfile(ifile),afile) !Adds quotes to a filename if it has a space in it.
+            iunit=utl_nextunit()
+            inquire(unit=iunit,opened=lopen) !returns information about a unit
+            open(unit=iunit,file=mstruc%tempfile(ifile),status='old',iostat=ierr,action='read') !Open file
+
+          if(ierr.ne.0)then !Error message
+            write(amessage,113) trim(errsub),trim(afile)
+113         format(a,' cannot open template file ',a,'.')
+            ifail=1
+            go to 9900
+          endif
+          iunit1=utl_nextunit()
+          if(idir.eq.0)then !Setting the position of the output file
+            mifile=mstruc%modinfile(ifile)
+          else
+            mifile=trim(mstruc%workdir)//trim(mstruc%modinfile(ifile))
+          endif
+          open(unit=iunit1,file=mifile,iostat=ierr)
+          if(ierr.ne.0)then !Error message
+            call utl_addquote(mifile,afile)
+            write(amessage,114) trim(errsub),trim(afile)
+114         format(a,' cannot open model input file ',a,' to write updated parameter ',  &
+            'values prior to running model.')
+            ifail=1
+            go to 9900
+          endif
+          
+          !Start reading the template file
+          read(iunit,*,err=119) !Read the line with "ptf ~"
+          iline=1 !Starting the counter for counting the number of lines
+116       iline=iline+1 !Plus one to the counter
+          read(iunit,117,end=118,err=119) dline !Read line from tempfile to dline. dline is 2000 characters long
+117       format(a)
+          lc=len_trim(dline) !Trimming dline (tempfile), lc = length of charecters
+          j2=0 !j1 and j2 is used to specify where there was read from last and where we need to read from next.
+122       if(j2.ge.lc) go to 123 !Write dline to output file
+          !index: Returns the position of the start of the first occurrence of string SUBSTRING as a substring in STRING, counting from one. If SUBSTRING is not present in STRING, zero is returned.
+          j1=index(dline(j2+1:lc),mstruc%pardel(ifile)) !From j2+1 to end (lc), checking if it fits with something in "parameter delimiters"? "~"?
+          if(j1.eq.0) go to 123 !Write dline to output file
+          j1=j1+j2 !Move forward
+          j2=index(dline(j1+1:lc),mstruc%pardel(ifile)) !Find the next place to read
+          j2=j2+j1
+          call mio_parnam(jfail,j1,j2,tpar) !Extracts a parameter name from a string (dline is global) and set it into tpar
+          call mio_which1(jfail,mstruc%npar,ipar,mstruc%apar,tpar) !Finds a string (tpar = tname = object name to look for) in an array of strings (mstruc%apar = aname = an array of object names)
+!       The following works when space bigger than pword(:nblnk(pword))
+!       dline(j1:j2)=pword(ipar)(:nblnk(pword(ipar)))
+          do 124 j=j1,j2 !Clean dline from j1 to j2
+            dline(j:j)=' '
+124       continue
+          j=len_trim(mstruc%pword(ipar)) !pword = word for each parameter, ipar = idim = where to start the search: j is probably the length of the given parameter
+          dline(j2-j+1:j2)=mstruc%pword(ipar)(1:j) !Incert the value found in pword into dline
+          go to 122 !Repeat until the write command is called in the loop.
+123       write(iunit1,117,err=125) trim(dline) !Write dline to the output file
+          go to 116 !Go to next line and repeat the above.
+125       call utl_addquote(mifile,afile) !Error
+          write(amessage,126) trim(errsub),trim(afile)
+126       format(a,' cannot write to model input file ',a,'.')
+          ifail=1
+          go to 9900
+          
+          !When the reading has reached the end of the file it goes to 118
+          !Close template file
+118       close(unit=iunit,iostat=ierr) !MC: Added the error
+          if(ierr.ne.0)then !If the error is non-zero
+            call utl_addquote(mstruc%tempfile(ifile),afile) !write the template file name to afile
+127         format(a,' cannot close tempfile file ',a,'.')  !First a: errsub='Error writing parameter values to model input files:', second a: afile = template file name
+            write(amessage,126) trim(errsub),trim(afile)    !write the error message
+            ifail=1    !The program failed
+            go to 9900 !Exit
+          endif
+
+          !Close output file
+          close(unit=iunit1,iostat=ierr)
+          if(ierr.ne.0)then
+            call utl_addquote(mifile,afile)
+            write(amessage,126) trim(errsub),trim(afile)
+            ifail=1
+            go to 9900
+          endif
+112     continue !The end of the old do-loop
+        go to 9900 !Exit
+
+119     write(amessage,121) trim(afile)
+121     format('Unable to read template file ',a,'.')
+        ifail=1
+        go to 9900
+
+! -- Function exit point.
+
+9900    continue
+        if(ifail.eq.0)then
+          mio_write_model_input_files_mult_delta=0
+        else if(ifail.eq.1)then
+          mio_write_model_input_files_mult_delta=1
+          call err_reset(estruc)
+          call err_add_error(estruc,amessage,function_name)
+        endif
+        return
+
+end function mio_write_model_input_files_mult_delta
 
 
 
@@ -2707,7 +2904,7 @@ integer function mio_finalise(estruc,mstruc)
         if(ifail.eq.0)then
           mio_finalise=0
         else if(ifail.eq.1)then
-          mio_finalise=0
+          mio_finalise=0 !M.C. Shouldn't this one be 1?
         endif
 
         return
@@ -2987,7 +3184,7 @@ subroutine mio_which1(ifail,ndim,idim,aname,tname)
 
         ifail=0
         if((idim.lt.1).or.(idim.gt.ndim)) idim=1
-        call utl_casetrans(tname,'lo')
+        call utl_casetrans(tname,'lo') !casetrans converts a string to upper or lower case.
         if(tname.eq.aname(idim)) return
         if(idim.ne.ndim)then
           do 20 i=idim+1,ndim
@@ -3055,8 +3252,9 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
 !           ifail=-2 ...... internal error type 2
 !           ifail=-3 ...... internal error type 3
 
-        integer precis,lw,pos,inc,d,p,w,j,jj,k,jexp,n,jfail,nw,epos,pp,nopnt,kexp,iflag,lexp
-        integer ifail
+        implicit none
+        integer precis,lw,pos,inc,d,p,w,j,j87,jj,k,jexp,n,jfail,nw,epos,pp,nopnt,kexp,iflag,lexp
+        integer ifail, ipp2
         double precision val,tval
         character*29 tword,ttword,fmt*14
         character*(*) word
@@ -3074,11 +3272,11 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
         pos=1
         if(val.lt.0.0d0)pos=0
 #ifdef USE_D_FORMAT
-        write(tword,'(1PD23.15D3)') val
+        write(tword,'(1PD23.15D3)') val !MC: Remark #8293. '(1PD22.15D3)' should maybe be '(1PD22.15)'
 #else
-        write(tword,'(1PE23.15E3)') val
+        write(tword,'(1PE23.15E3)') val !MC: Remark #8293. '(1PE22.15E3)' should maybe be '(1PE22.15)'
 #endif
-        call utl_casetrans(tword,'hi')
+        call utl_casetrans(tword,'hi') !casetrans converts a string to upper or lower case.
         read(tword(20:23),'(i4)') jexp
         epos=1
         if(jexp.lt.0)epos=0
@@ -3089,7 +3287,7 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
           lw=min(15,nw)
         else
           lw=min(23,nw)
-        endif
+        endif     
 
         n=0
         if(nopnt.eq.1)n=n+1
@@ -3122,18 +3320,18 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
           if(pos.eq.1) then
             if(lw.ge.22) then
 #ifdef USE_D_FORMAT
-              write(word,'(1PD22.15D3)',err=80) val
+              write(word,'(1PD22.15D3)',err=80) val  !MC: Remark #8293. '(1PD22.15D3)' should maybe be '(1PD22.15)'
 #else
-              write(word,'(1PE22.15E3)',err=80) val
+              write(word,'(1PE22.15E3)',err=80) val  !MC: Remark #8293. '(1PE22.15E3)' should maybe be '(1PE22.15)'
 #endif
               go to 200
             endif
           else
             if(lw.ge.23) then
 #ifdef USE_D_FORMAT
-              write(word,'(1PD23.15D3)',err=80) val
+              write(word,'(1PD23.15D3)',err=80) val !MC: Remark #8293. '(1PD22.15D3)' should maybe be '(1PD22.15)'
 #else
-              write(word,'(1PE23.15E3)',err=80) val
+              write(word,'(1PE23.15E3)',err=80) val !MC: Remark #8293. '(1PE22.15E3)' should maybe be '(1PE22.15)'
 #endif
               go to 200
             endif
@@ -3164,7 +3362,7 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
           d=d-1
           go to 20
         endif
-        k=index(word,'.')
+        k=index(word,'.') !k is set
         if(k.eq.0)then
           ifail=-1
           return
@@ -3238,12 +3436,21 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
               go to 85
             endif
           endif
+        !IFORT is not happy with the double declairation of 87 and is replaced by
+        !#ifdef USE_D_FORMAT
+        !87         j=index(tword,'D')
+        !#else
+        !87         j=index(tword,'E')
+        !#endif
+
+87      j = 1 !Dummy value          
 #ifdef USE_D_FORMAT
-87        j=index(tword,'D')
+         j87=index(tword,'D') !MC: before "87   j = index...". See above
 #else
-87        j=index(tword,'E')
+         j87=index(tword,'E') !MC: before "87   j = index...". See above
 #endif
-          go to 151
+        j = j87 !MC: This one is introduced to avoid double declair 87.
+        go to 151
         endif
         inc=0
         p=lw-2
@@ -3269,6 +3476,7 @@ subroutine mio_wrtsig(ifail,val,word,nw,precis,tval,nopnt)
           p=p+1
           go to 90
         endif
+!MC: Compiler is not happy with double declaration of 100. The problem can be solved by Property>Fortran>Preprocessor>Preprocess Source file: Yes (/fpp)
 #ifdef USE_D_FORMAT
 100     format('(',I2,'pD',I2,'.',I2,'D3)')
 #else

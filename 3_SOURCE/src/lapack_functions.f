@@ -16,22 +16,25 @@
         if (allocated(WORK)) deallocate(WORK)
       end subroutine INVGM
 
-      subroutine SLVSSU(N,A,X)  ! Subroutine to solve a symmetric
-                                  ! system A*X=B upstored
-        integer ,intent (in)               :: N
+     
+      subroutine SLVSSU(N,nrhs,A,X)   ! Subroutine to solve a symmetric
+                                      ! system A*X=B upstored
+                                      ! MC: Added a new variable nrhs for PCGA
+        integer ,intent (in)               :: N, nrhs
         integer                            :: INFO,LWORK
         double precision, intent (inout)   :: A(N,N)
-        double precision, intent (inout)   :: X(N)
+        double precision, intent (inout)   :: X(N, nrhs)
         integer                            :: IPIV(N)
         double precision                   :: BESTWORK(1)
         double precision, allocatable      :: WORK(:)
         
-
-       call DSYSV('U',N,1,A,N,IPIV,X,N,BESTWORK,-1,INFO)
+      !dsysv (  uplo='U' ,  n=N ,  nrhs=nrhs ,  a=A ,  lda=N ,  ipiv=IPIV ,  b=X ,  ldb=N ,  work ,  lwork ,  info )
+       call DSYSV('U',N,nrhs,A,N,IPIV,X,N,BESTWORK,-1,INFO)
        LWORK=INT(BESTWORK(1))
        allocate (WORK(LWORK))
-       call DSYSV('U',N,1,A,N,IPIV,X,N,WORK,LWORK,INFO)
+       call DSYSV('U',N,nrhs,A,N,IPIV,X,N,WORK,LWORK,INFO)
        if (allocated(WORK)) deallocate(WORK)
+       write (*,*) INT(BESTWORK(1))
        write(*,*) info
       end subroutine SLVSSU
 

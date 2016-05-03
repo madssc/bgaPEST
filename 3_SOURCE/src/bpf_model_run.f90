@@ -13,7 +13,6 @@ contains
     use error_message
     use extern_derivs
     use jacread
-
  
     implicit none
 !--  Main Data Arrays for OBS and PARS
@@ -55,7 +54,7 @@ contains
 !-- RUN THE MODEL IN THE MODE DESIRED
     select case (forward_flag)
         case (0) ! single forward run
-            call system(d_MOD%com)
+            call system(d_MOD%com) !reincert
             !-- MIO read the ouput file results and update 
             if(mio_read_model_output_files(errstruc,miostruc, d_OBS%h).ne.0) then
               call utl_bomb_out(errstruc)

@@ -62,6 +62,7 @@ implicit none
        write(iunit,52) 'PARGPNME','DERINC','FORCEN'
 52     format(A50,A10,A12)
        do i = 1,cv_PAR%npargp
+        !write(iunit,*) cv_PAR%derinc(i)
         write(iunit,55) cv_PAR%grp_name(i), cv_PAR%derinc(i), 'always_2'
        enddo       
 55      format(A50,F10.5,A12)

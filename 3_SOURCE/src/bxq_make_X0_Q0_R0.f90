@@ -18,7 +18,7 @@ module make_kernels
         double precision, intent(in)       :: horiz_angle,horiz_ratio,vertical_ratio
         
             ! convert the angle of anisotropy from degrees to radians
-            rot_theta = horiz_angle * 3.14159265 / 180.0
+            rot_theta = horiz_angle * 3.14159265 / 180.0 !MC: pi could be defined as 4.d0*DATAN(1.d0)
             ! calculate sine and cosine
             sin_th = sin(rot_theta)
             cos_th = cos(rot_theta)
@@ -242,7 +242,7 @@ select case (cv_A%Q_compression_flag)  !Select the compressed or not form of Q0 
      select case (cv_A%store_Q)        
        case (.TRUE.)
         do p = 1, cv_PAR%p  !Loop for each beta that correspond to each different Q0_C 
-          cba = Q0_All(p)%BetaAss
+          cba = Q0_All(p)%BetaAss !current beta association
           if (cv_S%var_type(Q0_All(p)%BetaAss)==0) then  ! Q0_C is just a single 1 for nugget
             allocate (Q0_All(p)%Q0_C(1,1)) !Allocation Just a value
             Q0_All(p)%Q0_C(1,1) = 1.

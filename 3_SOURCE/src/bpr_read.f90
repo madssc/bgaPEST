@@ -103,17 +103,19 @@ module bayes_pest_reader
           allocate(Q0_All(0)) !We need this because of the external function of struct pars optimization (No memory is required)   
        endif
               
-       call bdp_read_parameter_groups(BL,cv_PAR,inunit,errmsg)
+       call bdp_read_parameter_groups(BL,cv_A,cv_PAR,inunit,errmsg)
        call bdp_read_data_parameters(errstruc,BL,d_PAR,cv_PAR,cv_A,Q0_All, &
                             & inunit,errmsg,miostruc)
+       if (cv_A%PCGA == 0) then !Not required when working with PCGA
        if (cv_PAR%npar .gt. 100000) then
          cv_A%store_Q = .FALSE.
        endif
+       endif
        
        call bdp_read_observation_groups(BL,cv_OBS,inunit,errmsg)                            
-       call bdp_read_data_observations(BL,d_OBS, cv_OBS, &
+       call bdp_read_data_observations(BL,d_OBS, cv_OBS, cv_A, &
                             & inunit,errmsg,miostruc)
-       call bpi_init_algorithmic_DATA(d_A,cv_PAR%npar,cv_OBS%nobs) !Allocate memory and initialize H matrix (nobs x npar)
+       call bpi_init_algorithmic_DATA(cv_A,d_A,cv_PAR%npar,cv_OBS%nobs) !Allocate memory and initialize H matrix (nobs x npar)
        call bdp_read_data_model_command_line(BL,d_MOD,cv_A%deriv_mode,inunit,errmsg)       
        call bdp_read_data_model_input_output(BL,d_MIO,cv_MIO,cv_A,cv_PAR%npargp,inunit,errmsg)
        if (cv_A%par_anisotropy .eq. 1) then

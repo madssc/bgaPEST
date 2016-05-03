@@ -402,7 +402,7 @@ integer function UTL_NEXTUNIT()
 
         logical::lopen
 
-        do utl_nextunit=10,100
+        do utl_nextunit=10,99
           inquire(unit=utl_nextunit,opened=lopen)
           if(.not.lopen) return
         enddo

@@ -467,10 +467,10 @@ contains
 ! -- It is inefficient to repeat the following code on each occasion that a line of data is read. If it
 !    could be guaranteed that the user's column list would be the same on each occasion that a line is
 !    read from a table, this code would need to be executed only on entry to each block.
-
+           
            colexport=0                        ! an array
            maxcolexport=0
-           do icol=1,ncol
+           do icol=1,ncol !MC: Where is ncol be defined? It works, however, its a bit unsafe to declair ncol outside the subroutine.
              do jcol=1,numcol
                acolumn=adjustl(columnname(jcol))
                call uppercase(acolumn)
@@ -483,7 +483,7 @@ contains
 20           continue
            enddo
          endif
-
+         
 ! -- A line is read.
 
          tablerow=tablerow+1

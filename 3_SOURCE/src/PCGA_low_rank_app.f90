@@ -35,8 +35,8 @@
     double precision                        :: sqrt_eig, K_old
     complex(kind=selected_real_kind(30))    :: result_C
     real(kind=selected_real_kind(30))       :: result_C_real1, result_C_real2!, result_C_imag1, result_C_imag2
-    integer                                 :: i, iii, j, k, p, lc, rc, cc, tmp_npar, tmp_Ncol, tmp_Nrow, tmp_Nlay, K_s_tmp
-    integer                                 :: work_Z_size, info_Z, work_C_size, info_C, status, count_K, count_K_s, count_parameters, start_v, end_v, Ncol, Nrow, Nlay, NAC, NAR, NAL
+    integer                                 :: i, iii, j, k, p, lc, rc, cc, tmp_npar, tmp_Nrow, tmp_Ncol, tmp_Nlay, K_s_tmp
+    integer                                 :: work_Z_size, info_Z, work_C_size, info_C, status, count_K, count_K_s, count_parameters, start_v, end_v, Nrow, Ncol, Nlay, NAR, NAC, NAL
     integer                                 :: extend_factor, extend_factor_max
     logical, save                           :: first_entry = .true. !Is used for deallocation
     double precision, allocatable           :: zr(:,:,:), zr2(:,:,:), zi(:,:,:), zi2(:,:,:), Z_sample_selected(:,:), eigenvalues(:), SCC_copy(:,:,:)
@@ -83,29 +83,29 @@
 
             !Saving the original variables
             tmp_npar = Q0_All(p)%npar
-            tmp_Ncol = Q0_All(p)%Ncol
             tmp_Nrow = Q0_All(p)%Nrow
+            tmp_Ncol = Q0_All(p)%Ncol
             tmp_Nlay = Q0_All(p)%Nlay
 
             !Incerting the fictive values
-            Q0_All(p)%Ncol = Q0_All(p)%Nfcol
             Q0_All(p)%Nrow = Q0_All(p)%Nfrow
+            Q0_All(p)%Ncol = Q0_All(p)%Nfcol
             Q0_All(p)%Nlay = Q0_All(p)%Nflay
             Q0_All(p)%npar = Q0_All(p)%fpar
         endif
 
         !Number of columns, rows and layers in the p'th model
-        Ncol = Q0_All(p)%Ncol
         Nrow = Q0_All(p)%Nrow
+        Ncol = Q0_All(p)%Ncol
         Nlay = Q0_All(p)%Nlay
 
-        NAC  = 2*Ncol - 2 !Number of columns after appending
         NAR  = 2*Nrow - 2 !Number of rows after appending
+        NAC  = 2*Ncol - 2 !Number of columns after appending
         NAL  = 2*Nlay - 2 !Number of layers after appending
 
         !There is no appending in a non existing dimension
-        if (Ncol < 2) NAC = 1
         if (Nrow < 2) NAR = 1
+        if (Ncol < 2) NAC = 1
         if (Nlay < 2) NAL = 1
 
         !Transfer K and K_s values
@@ -114,7 +114,7 @@
 
         !It is possible to automaticly use the maximum k-values
         if (cv_A%seed_Gaussian <= 0) then
-            Q0_All(p)%K_s = NAC*NAR*NAL
+            Q0_All(p)%K_s = NAR*NAC*NAL
             Q0_All(p)%K   = Q0_All(p)%npar
         endif
 
@@ -138,16 +138,16 @@
 
             !The imaginary part for the Fourier transformation
             if (associated(d_XQR%SCCi)) deallocate(d_XQR%SCCi)
-            allocate(d_XQR%SCCi(NAC,NAR,NAL))
+            allocate(d_XQR%SCCi(NAR,NAC,NAL))
             d_XQR%SCCi = 0.d0
 
             !Setup for the Fourier transformations
-            call setup_FFT(handle_FFT, handle_IFFT, NAC, NAR, NAL)
+            call setup_FFT(handle_FFT, handle_IFFT, NAR, NAC, NAL)
 
             !Performing a Fourier transformation of the SCC matrix. Then SCC becomes the (approximate) eigenvalues of SCC.
             !The introduction of (:,1,1) is made since FFT and IFFT works in one dimensional arrays, however SCC and SCCi are three dimensional. The structure of the 3D matrix is set in DFTI_INPUT_STRIDES whereby the FFT only need the memory adress of the first element. This is given by (:,1,1)
             status = DftiComputeForward(handle_FFT, d_XQR%SCC(:,1,1), d_XQR%SCCi(:,1,1))
-            !d_XQR%SCC = sqrt(dble(NAC*NAR*NAL))*d_XQR%SCC !Eigenvalues should be rescaled according to Nowak & Cirpka 2013 equation 8. They assume the FFT/IFFT algorithm to have a rescaling constant in front of the summation (A1-A2) however that is not the case for this FFT/IFFT. Here there are no scaling, wherefore this rescaling should not be used.
+            !d_XQR%SCC = sqrt(dble(NAR*NAC*NAL))*d_XQR%SCC !Eigenvalues should be rescaled according to Nowak & Cirpka 2013 equation 8. They assume the FFT/IFFT algorithm to have a rescaling constant in front of the summation (A1-A2) however that is not the case for this FFT/IFFT. Here there are no scaling, wherefore this rescaling should not be used.
 
             !SCCi is zero after the transformation because SCC is symmetric before the transformation.
             deallocate(d_XQR%SCCi)
@@ -157,7 +157,7 @@
                 exit
             else !Else the model domain is increased in all directions.
                 if (extend_factor == 1) then
-                    allocate(SCC_copy(NAC,NAR,NAL))
+                    allocate(SCC_copy(NAR,NAC,NAL))
                     SCC_copy = d_XQR%SCC
                 endif
 
@@ -169,26 +169,26 @@
 122                 format("Note: The eigenvalues of the approximation of the covariance matrix Qss was negative ( ",EN10.1," ) for beta association ",I2,". The model domain is fictively increased by a factor of ",I2," in the sampling process for the approximation. This will not have an influence on the forward modelling, however will increase the workload for the computations related to the approxmation of Qss.")
 
                     !Reset the values
-                    Ncol = Q0_All(p)%Ncol
                     Nrow = Q0_All(p)%Nrow
+                    Ncol = Q0_All(p)%Ncol
                     Nlay = Q0_All(p)%Nlay
 
                     !Increase those dimensions which exist
-                    if (Ncol > 1) Ncol = extend_factor * Ncol
                     if (Nrow > 1) Nrow = extend_factor * Nrow
+                    if (Ncol > 1) Ncol = extend_factor * Ncol
                     if (Nlay > 1) Nlay = extend_factor * Nlay
 
-                    !Set the new number of Columns/Rows/Layers after appending
-                    NAC  = 2*Ncol - 2
+                    !Set the new number of Rows/Columns/Layers after appending
                     NAR  = 2*Nrow - 2
+                    NAC  = 2*Ncol - 2
                     NAL  = 2*Nlay - 2
 
-                    if (Q0_All(p)%Ncol < 2) NAC = 1
                     if (Q0_All(p)%Nrow < 2) NAR = 1
+                    if (Q0_All(p)%Ncol < 2) NAC = 1
                     if (Q0_All(p)%Nlay < 2) NAL = 1
 
                     !Construct a SCC matrix which has the new size.
-                    call Construct_extended_SCC(d_XQR, cv_S, cv_PAR, cv_A, d_PAR, d_S, Q0_All, p, extend_factor, Ncol, Nrow, Nlay, NAC, NAR, NAL) !remember to remove the extra parts
+                    call Construct_extended_SCC(d_XQR, cv_S, cv_PAR, cv_A, d_PAR, d_S, Q0_All, p, extend_factor, Nrow, Ncol, Nlay, NAR, NAC, NAL) !remember to remove the extra parts
 
                     status = DftiFreeDescriptor(handle_FFT)
                     status = DftiFreeDescriptor(handle_IFFT)
@@ -207,18 +207,18 @@
 
         !Sample from a unit normal distribution into d_XQR%Z_sample_L
         if (cv_A%seed_Gaussian > 0) then
-            call sample_unit_normal_distribution(Q0_All, cv_A, d_XQR, p, NAC, NAR, NAL)
+            call sample_unit_normal_distribution(Q0_All, cv_A, d_XQR, p, NAR, NAC, NAL)
         elseif (cv_A%seed_Gaussian <= 0) then !set d_XQR%Z_sample_L to the identity matrix. Used for testing.
-            allocate(d_XQR%Z_sample_L(NAC*NAR*NAL, Q0_All(p)%K_s))
+            allocate(d_XQR%Z_sample_L(NAR*NAC*NAL, Q0_All(p)%K_s))
             d_XQR%Z_sample_L = 0.d0
-            do iii = 1, NAC*NAR*NAL
+            do iii = 1, NAR*NAC*NAL
                 d_XQR%Z_sample_L(iii,iii) = 1.d0
             enddo
         endif
 
         !Allocate for fouriertransformation of Z_sample and Z_sample_L
-        allocate(zr (NAC,NAR,NAL))
-        allocate(zi (NAC,NAR,NAL))
+        allocate(zr (NAR,NAC,NAL))
+        allocate(zi (NAR,NAC,NAL))
 
         if (associated(d_XQR%Z_sample)) deallocate(d_XQR%Z_sample)
         allocate(d_XQR%Z_sample(Q0_All(p)%npar, Q0_All(p)%K_s))
@@ -229,9 +229,9 @@
             zr = 0.d0
             zi = 0.d0
 
-            !Reshape NAC*NAR*NAL random numbers into a 3D matrix. zr and zi will not be correlated.
-            call Reshape_PCGA(d_XQR%Z_sample_L(:,i),   zr, NAC, NAR, NAL)
-            call Reshape_PCGA(d_XQR%Z_sample_L(:,i+1), zi, NAC, NAR, NAL)
+            !Reshape NAR*NAC*NAL random numbers into a 3D matrix. zr and zi will not be correlated.
+            call Reshape_PCGA(d_XQR%Z_sample_L(:,i),   zr, NAR, NAC, NAL)
+            call Reshape_PCGA(d_XQR%Z_sample_L(:,i+1), zi, NAR, NAC, NAL)
 
             !Originally a FFT was performed however since zr and zi are uncorrelated and the Fourier tranformation is a orthogonal transformation the vectors the transformation would just result in other uncorrelated Gaussian white random vector.
             !This means that the process is not required. Information is found at https://en.wikipedia.org/wiki/White_noise -> White noise vector -> "Therefore, any orthogonal (Fourier) transformation of the vector will result in a Gaussian white random vector".
@@ -239,11 +239,11 @@
 
             !Multiply the square-root of the eigenvalues of SCC onto the vectors zr and zi.
             do lc = 1, NAL
-                do rc = 1, NAR
-                    do cc = 1, NAC
-                        sqrt_eig = sqrt(d_XQR%SCC(cc,rc,lc))
-                        zr(cc,rc,lc) = sqrt_eig * zr(cc,rc,lc)
-                        zi(cc,rc,lc) = sqrt_eig * zi(cc,rc,lc)
+                do cc = 1, NAC
+                    do rc = 1, NAR
+                        sqrt_eig = sqrt(d_XQR%SCC(rc,cc,lc))
+                        zr(rc,cc,lc) = sqrt_eig * zr(rc,cc,lc)
+                        zi(rc,cc,lc) = sqrt_eig * zi(rc,cc,lc)
                     enddo
                 enddo
             enddo
@@ -253,12 +253,12 @@
             status = DftiComputeBackward(handle_IFFT, zr(:,1,1), zi(:,1,1))
 
             !Rescaling of FFT since the scaling-factor is 1.0 for both FFT and IFFT
-            zr = zr/sqrt(dble(NAC*NAR*NAL))
-            zi = zi/sqrt(dble(NAC*NAR*NAL))
+            zr = zr/sqrt(dble(NAR*NAC*NAL))
+            zi = zi/sqrt(dble(NAR*NAC*NAL))
 
-            !Using reverse zero padding (Ncol, Nrow, Nlay instead of NAC, NAR, NAL) and incerting the result in Z_sample.
-            call IReshape_PCGA(d_XQR%Z_sample(:,i),   zr, Q0_All(p)%Ncol, Q0_All(p)%Nrow, Q0_All(p)%Nlay)
-            call IReshape_PCGA(d_XQR%Z_sample(:,i+1), zi, Q0_All(p)%Ncol, Q0_All(p)%Nrow, Q0_All(p)%Nlay)
+            !Using reverse zero padding (Nrow, Ncol, Nlay instead of NAR, NAC, NAL) and incerting the result in Z_sample.
+            call IReshape_PCGA(d_XQR%Z_sample(:,i),   zr, Q0_All(p)%Nrow, Q0_All(p)%Ncol, Q0_All(p)%Nlay)
+            call IReshape_PCGA(d_XQR%Z_sample(:,i+1), zi, Q0_All(p)%Nrow, Q0_All(p)%Ncol, Q0_All(p)%Nlay)
 
             !Rescaling due to the random process.
             if (cv_A%seed_Gaussian > 0) then
@@ -268,34 +268,34 @@
 
         !Reincert the non-extended SCC matrix into d_XQR%SCC and the parameters. Setting the Fourier transformation settings.
         if (extend_factor > 1) then
-            Ncol = Q0_All(p)%Ncol
             Nrow = Q0_All(p)%Nrow
+            Ncol = Q0_All(p)%Ncol
             Nlay = Q0_All(p)%Nlay
 
-            NAC  = 2*Ncol - 2
             NAR  = 2*Nrow - 2
+            NAC  = 2*Ncol - 2
             NAL  = 2*Nlay - 2
 
-            if (Ncol < 2) NAC = 1
             if (Nrow < 2) NAR = 1
+            if (Ncol < 2) NAC = 1
             if (Nlay < 2) NAL = 1
 
-            !NAC, NAR and NAL has changed, wherefore the Fourier settings should be reset.
+            !NAR, NAC and NAL has changed, wherefore the Fourier settings should be reset.
             status = DftiFreeDescriptor(handle_FFT)
             status = DftiFreeDescriptor(handle_IFFT)
-            call setup_FFT(handle_FFT, handle_IFFT, NAC, NAR, NAL)
+            call setup_FFT(handle_FFT, handle_IFFT, NAR, NAC, NAL)
 
             !Reincert the original SCC
             if (associated(d_XQR%SCC)) deallocate(d_XQR%SCC)
-            allocate(d_XQR%SCC(NAC,NAR,NAL))
+            allocate(d_XQR%SCC(NAR,NAC,NAL))
             d_XQR%SCC = SCC_copy
             deallocate(SCC_copy)
         endif
 
         !Picking out those nodes which really exist.
         if (cv_A%non_complete_grid == 1) then
-            Q0_All(p)%Ncol = tmp_Ncol
             Q0_All(p)%Nrow = tmp_Nrow
+            Q0_All(p)%Ncol = tmp_Ncol
             Q0_All(p)%Nlay = tmp_Nlay
             Q0_All(p)%npar = tmp_npar
 
@@ -368,20 +368,20 @@
 
         !Computing C = U_Z * Qss * U_Z by use of fast Fourier transformation
         allocate(Q0_All(p)%C(Q0_All(p)%K_s,Q0_All(p)%K_s))
-        allocate(zr2(NAC,NAR,NAL))
-        allocate(zi2(NAC,NAR,NAL))
+        allocate(zr2(NAR,NAC,NAL))
+        allocate(zi2(NAR,NAC,NAL))
         do i = 1, Q0_All(p)%K_s
             zr = 0.d0
             zi = 0.d0
 
             !Reshape Npar random numbers into a 3D matrix, with zeros around
             !Using the i'th column in Z_sample
-            call Reshape_PCGA(d_XQR%Z_sample(:,i), zr, Ncol, Nrow, Nlay)
+            call Reshape_PCGA(d_XQR%Z_sample(:,i), zr, Nrow, Ncol, Nlay)
 
             !Fast Fourier transformtion of zr and zi and rescaling due to FFT.
             status = DftiComputeForward(handle_FFT, zr(:,1,1), zi(:,1,1))
-            zr = zr/sqrt(dble(NAC*NAR*NAL))
-            zi = zi/sqrt(dble(NAC*NAR*NAL))
+            zr = zr/sqrt(dble(NAR*NAC*NAL))
+            zi = zi/sqrt(dble(NAR*NAC*NAL))
 
             do j = i, Q0_All(p)%K_s
                 if (j /= i) then
@@ -390,39 +390,39 @@
 
                     !Reshape Npar random numbers into a 3D matrix, with zeros around
                     !Using the j'th column in Z_sample
-                    call Reshape_PCGA(d_XQR%Z_sample(:,j), zr2, Ncol, Nrow, Nlay)
+                    call Reshape_PCGA(d_XQR%Z_sample(:,j), zr2, Nrow, Ncol, Nlay)
 
                     !Fast Fourier transformtion of zr2 and zi2 and rescaling due to FFT.
                     status = DftiComputeForward(handle_FFT, zr2(:,1,1), zi2(:,1,1))
-                    zr2 = zr2/sqrt(dble(NAC*NAR*NAL))
-                    zi2 = zi2/sqrt(dble(NAC*NAR*NAL))
+                    zr2 = zr2/sqrt(dble(NAR*NAC*NAL))
+                    zi2 = zi2/sqrt(dble(NAR*NAC*NAL))
                 end if
 
                 !Originally the imaginary part of the product was also computed, however since it always was close to zero is it omitted.
                 !One could choose to compute this by cdot, however the two part are almost the same numbers with different sign. Then when the numbers are added round off errors are accumulated. This error can be much larger (e.g. 10^-8) than the correct answer (e.g. 10^-16).
                 !Therefore the numbers are computed separatly with high precision, whereafter they are added. In this way the error is as small as the correct answer (10^-16).
-                result_C_real1 = 0.0
-                result_C_real2 = 0.0
+                result_C_real1  = 0.0
+                result_C_real2  = 0.0
                 !result_C_imag1 = 0.0
                 !result_C_imag2 = 0.0
 
                 !FFT(u_1)^H * Lambda * FFT(u_2)
                 if (j /= i) then
                     do lc = 1, NAL
-                        do rc = 1, NAR
-                            do cc = 1, NAC
-                                result_C_real1 = result_C_real1 + zr(cc,rc,lc) * d_XQR%SCC(cc,rc,lc) * zr2(cc,rc,lc)
-                                result_C_real2 = result_C_real2 + zi(cc,rc,lc) * d_XQR%SCC(cc,rc,lc) * zi2(cc,rc,lc)
-                                !result_C_imag1 = result_C_imag1 + zr(cc,rc,lc) * d_XQR%SCC(cc,rc,lc) * zi2(cc,rc,lc)
-                                !result_C_imag2 = result_C_imag2 + zi(cc,rc,lc) * d_XQR%SCC(cc,rc,lc) * zr2(cc,rc,lc)
+                        do cc = 1, NAC
+                            do rc = 1, NAR
+                                result_C_real1  = result_C_real1 + zr(rc,cc,lc) * d_XQR%SCC(rc,cc,lc) * zr2(rc,cc,lc)
+                                result_C_real2  = result_C_real2 + zi(rc,cc,lc) * d_XQR%SCC(rc,cc,lc) * zi2(rc,cc,lc)
+                                !result_C_imag1 = result_C_imag1 + zr(rc,cc,lc) * d_XQR%SCC(rc,cc,lc) * zi2(rc,cc,lc)
+                                !result_C_imag2 = result_C_imag2 + zi(rc,cc,lc) * d_XQR%SCC(rc,cc,lc) * zr2(rc,cc,lc)
                             enddo
                         enddo
                     enddo
                 elseif (j == i) then !FFT(u_1)^H * Lambda * FFT(u_1)
                     do lc = 1, NAL
-                        do rc = 1, NAR
-                            do cc = 1, NAC
-                                result_C_real1 = result_C_real1 + d_XQR%SCC(cc,rc,lc) * (zr(cc,rc,lc)**2 + zi(cc,rc,lc)**2)
+                        do cc = 1, NAC
+                            do rc = 1, NAR
+                                result_C_real1 = result_C_real1 + d_XQR%SCC(rc,cc,lc) * (zr(rc,cc,lc)**2 + zi(rc,cc,lc)**2)
                             enddo
                         enddo
                     enddo
@@ -528,22 +528,22 @@
     type(Q0_compr),         intent(in), pointer     :: Q0_All(:)
     integer,                intent(in)              :: p
     double precision,       allocatable             :: A(:)
-    integer                                         :: Ncol, Nrow, Nlay, NAC, NAR, NAL, lc, rc, place, i
+    integer                                         :: Nrow, Ncol, Nlay, NAR, NAC, NAL, lc, cc, place, i
     double precision                                :: theta_1, theta_2, Lmax
 
     !The variance of the covariance matrix
     theta_1 = d_S%theta(Q0_All(p)%BetaAss,1)
 
-    Ncol = Q0_All(p)%Ncol
     Nrow = Q0_All(p)%Nrow
+    Ncol = Q0_All(p)%Ncol
     Nlay = Q0_All(p)%Nlay
 
-    NAC  = 2*Ncol - 2; !Number of columns after appending
     NAR  = 2*Nrow - 2; !Number of rows after appending
+    NAC  = 2*Ncol - 2; !Number of columns after appending
     NAL  = 2*Nlay - 2; !Number of layers after appending
 
-    if (Ncol < 2) NAC = 1
     if (Nrow < 2) NAR = 1
+    if (Ncol < 2) NAC = 1
     if (Nlay < 2) NAL = 1
 
     !Calculate the first column of the covariance matrix
@@ -551,7 +551,7 @@
     select case (cv_S%var_type(Q0_All(p)%BetaAss)) !Variogram type
     case (0) !Nugget:
         A(:) = 0.d0
-        do i = 1,(Ncol*Nrow*Nlay),Ncol !Nrow?
+        do i = 1,(Nrow*Ncol*Nlay),Nrow !Changed from Ncol after 1. pub
             A(i) = theta_1
         enddo
 
@@ -580,29 +580,29 @@
 
     !Allocating SCC and reshaping the first column of the covariance matrix into it
     if (associated(d_XQR%SCC)) deallocate(d_XQR%SCC)
-    allocate(d_XQR%SCC(NAC,NAR,NAL))
+    allocate(d_XQR%SCC(NAR,NAC,NAL))
     d_XQR%SCC = 0.d0
-    call Reshape_PCGA(A, d_XQR%SCC, Ncol, Nrow, Nlay)
+    call Reshape_PCGA(A, d_XQR%SCC, Nrow, Ncol, Nlay)
     deallocate(A)
 
-    !Make the circulance for columns
-    if (Ncol > 2) then
+    !Make the circulance for rows
+    if (Nrow > 2) then
         do lc = 1,Nlay
-            do rc = 1,Nrow
-                place = Ncol+1
-                do i = Ncol-1,2,-1
-                    d_XQR%SCC(place,rc,lc) = d_XQR%SCC(i,rc,lc)
+            do cc = 1,Ncol
+                place = Nrow+1
+                do i = Nrow-1,2,-1
+                    d_XQR%SCC(place,cc,lc) = d_XQR%SCC(i,cc,lc)
                     place = place + 1
                 enddo
             enddo
         enddo
     endif
 
-    !Make the circulance for rows
-    if (Nrow > 2) then
+    !Make the circulance for columns
+    if (Ncol > 2) then
         do lc = 1,Nlay
-            place = Nrow+1
-            do i = Nrow-1,2,-1
+            place = Ncol+1
+            do i = Ncol-1,2,-1
                 d_XQR%SCC(:,place,lc) = d_XQR%SCC(:,i,lc)
                 place = place + 1
             enddo
@@ -623,7 +623,7 @@
     !******************************************************************************************************************
     !*** An extended version of the SCC matrix when the eigenvalues estimated through FFT computations are negative
     !******************************************************************************************************************
-    subroutine Construct_extended_SCC(d_XQR, cv_S, cv_PAR, cv_A, d_PAR, d_S, Q0_All, p, extend_factor, Ncol_mul, Nrow_mul, Nlay_mul, NAC_mul, NAR_mul, NAL_mul)
+    subroutine Construct_extended_SCC(d_XQR, cv_S, cv_PAR, cv_A, d_PAR, d_S, Q0_All, p, extend_factor, Nrow_mul, Ncol_mul, Nlay_mul, NAR_mul, NAC_mul, NAL_mul)
 
     type(kernel_XQR),       intent(inout)           :: d_XQR
     type(cv_struct),        intent(in)              :: cv_S
@@ -634,39 +634,39 @@
     type(Q0_compr),         intent(in), pointer     :: Q0_All(:)
     integer,                intent(in)              :: p, extend_factor !>1
     double precision,       allocatable             :: A(:)
-    integer,                intent(in)              :: Ncol_mul, Nrow_mul, Nlay_mul, NAC_mul, NAR_mul, NAL_mul
-    integer                                         :: Ncol, Nrow, Nlay, lc, rc, place, i, ii, j, jj, k, kk
+    integer,                intent(in)              :: Nrow_mul, Ncol_mul, Nlay_mul, NAR_mul, NAC_mul, NAL_mul
+    integer                                         :: Nrow, Ncol, Nlay, lc, cc, place, i, ii, j, jj, k, kk
     double precision                                :: theta_1, theta_2, Lmax
-    double precision                                :: col_min, row_min, lay_min, col_max, row_max, lay_max, p_col, p_row, p_lay
+    double precision                                :: row_min, col_min, lay_min, row_max, col_max, lay_max, p_row, p_col, p_lay
     integer, parameter                              :: out_unit2=22
 
-    size_mul_col = extend_factor
     size_mul_row = extend_factor
+    size_mul_col = extend_factor
     size_mul_lay = extend_factor
 
-    Ncol = Q0_All(p)%Ncol
     Nrow = Q0_All(p)%Nrow
+    Ncol = Q0_All(p)%Ncol
     Nlay = Q0_All(p)%Nlay
 
-    if (Ncol < 2) size_mul_col = 1
     if (Nrow < 2) size_mul_row = 1
+    if (Ncol < 2) size_mul_col = 1
     if (Nlay < 2) size_mul_lay = 1
 
     if (associated(d_XQR%SCC)) deallocate(d_XQR%SCC)
-    allocate(d_XQR%SCC(NAC_mul,NAR_mul,NAL_mul))
+    allocate(d_XQR%SCC(NAR_mul,NAC_mul,NAL_mul))
 
     !Finding the coordinates of the first parameter and the distance to the last parameter. It is assumed that they are the two points furthest away from each other.
-    if (Ncol > 1) then
-        col_min     = d_PAR%lox(Q0_All(p)%Beta_Start,1)
-        col_max     = d_PAR%lox(Q0_All(p)%Beta_Start+Q0_All(p)%npar-1,1) + d_PAR%lox(Q0_All(p)%Beta_Start+1,1) - 2*col_min
-    endif
     if (Nrow > 1) then
-        row_min     = d_PAR%lox(Q0_All(p)%Beta_Start,2)
-        row_max     = d_PAR%lox(Q0_All(p)%Beta_Start+Q0_All(p)%npar-1,2) + d_PAR%lox(Q0_All(p)%Beta_Start+Ncol+1,2) - 2*row_min
+        row_min     = d_PAR%lox(Q0_All(p)%Beta_Start,1)
+        row_max     = d_PAR%lox(Q0_All(p)%Beta_Start+Q0_All(p)%npar-1,1) + d_PAR%lox(Q0_All(p)%Beta_Start+1,1) - 2*row_min
+    endif
+    if (Ncol > 1) then
+        col_min     = d_PAR%lox(Q0_All(p)%Beta_Start,2)
+        col_max     = d_PAR%lox(Q0_All(p)%Beta_Start+Q0_All(p)%npar-1,2) + d_PAR%lox(Q0_All(p)%Beta_Start+Nrow+1,2) - 2*col_min
     endif
     if (Nlay > 1) then
         lay_min     = d_PAR%lox(Q0_All(p)%Beta_Start,3)
-        lay_max     = d_PAR%lox(Q0_All(p)%Beta_Start+Q0_All(p)%npar-1,3) + d_PAR%lox(Q0_All(p)%Beta_Start+Ncol*Nrow+1,3) - 2*lay_min
+        lay_max     = d_PAR%lox(Q0_All(p)%Beta_Start+Q0_All(p)%npar-1,3) + d_PAR%lox(Q0_All(p)%Beta_Start+Nrow*Ncol+1,3) - 2*lay_min
     endif
 
     !Computing the distances between all points in the extended model domain
@@ -674,24 +674,24 @@
         d_XQR%SCC = 0.d0
         do kk = 0,size_mul_lay-1
             do k  = 1,Nlay
-                do jj = 0,size_mul_row-1
-                    do j  = 1,Nrow
-                        do ii = 0,size_mul_col-1
-                            do i  = 1,Ncol
-                                place = i + (j-1)*Ncol + (k-1)*Nrow*Ncol
-                                if (Ncol > 1) then
-                                    p_col = d_PAR%lox(Q0_All(p)%Beta_Start+place-1,1)
-                                    d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) = d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) + (p_col-col_min + dble(ii)*col_max)**2
-                                endif
+                do jj = 0,size_mul_col-1
+                    do j  = 1,Ncol
+                        do ii = 0,size_mul_row-1
+                            do i  = 1,Nrow
+                                place = i + (j-1)*Nrow + (k-1)*Ncol*Nrow
                                 if (Nrow > 1) then
-                                    p_row = d_PAR%lox(Q0_All(p)%Beta_Start+place-1,2)
-                                    d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) = d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) + (p_row-row_min + dble(jj)*row_max)**2
+                                    p_row = d_PAR%lox(Q0_All(p)%Beta_Start+place-1,1)
+                                    d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) = d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) + (p_row-row_min + dble(ii)*row_max)**2
+                                endif
+                                if (Ncol > 1) then
+                                    p_col = d_PAR%lox(Q0_All(p)%Beta_Start+place-1,2)
+                                    d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) = d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) + (p_col-col_min + dble(jj)*col_max)**2
                                 endif
                                 if (Nlay > 1) then
                                     p_lay = d_PAR%lox(Q0_All(p)%Beta_Start+place-1,3)
-                                    d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) = d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) + (p_lay-lay_min + dble(kk)*lay_max)**2
+                                    d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) = d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) + (p_lay-lay_min + dble(kk)*lay_max)**2
                                 endif
-                                d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay) = sqrt(d_XQR%SCC(i + ii*Ncol, j + jj*Nrow, k + kk*Nlay))
+                                d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay) = sqrt(d_XQR%SCC(i + ii*Nrow, j + jj*Ncol, k + kk*Nlay))
                             enddo
                         enddo
                     enddo
@@ -704,15 +704,15 @@
     theta_1 = d_S%theta(Q0_All(p)%BetaAss,1)
     select case (cv_S%var_type(Q0_All(p)%BetaAss)) !Variogram type
     case (0) !Nugget:
-        d_XQR%SCC(:Ncol_mul,:Nrow_mul,:Nlay_mul) = theta_1
+        d_XQR%SCC(:Nrow_mul,:Ncol_mul,:Nlay_mul) = theta_1
 
     case (1) !Linear:
         Lmax = d_XQR%L
-        d_XQR%SCC(:Ncol_mul,:Nrow_mul,:Nlay_mul) = theta_1 * Lmax * exp(-d_XQR%SCC(:Ncol_mul,:Nrow_mul,:Nlay_mul)/Lmax)
+        d_XQR%SCC(:Nrow_mul,:Ncol_mul,:Nlay_mul) = theta_1 * Lmax * exp(-d_XQR%SCC(:Nrow_mul,:Ncol_mul,:Nlay_mul)/Lmax)
 
     case (2) !Exponential:
         theta_2 = d_S%theta(Q0_All(p)%BetaAss,2)
-        d_XQR%SCC(:Ncol_mul,:Nrow_mul,:Nlay_mul) = theta_1 * exp(-d_XQR%SCC(:Ncol_mul,:Nrow_mul,:Nlay_mul)/theta_2)
+        d_XQR%SCC(:Nrow_mul,:Ncol_mul,:Nlay_mul) = theta_1 * exp(-d_XQR%SCC(:Nrow_mul,:Ncol_mul,:Nlay_mul)/theta_2)
 
     case (3) !Anisotropy exponential correlation function
         write(*,*) "Warning: Error, the anisotropy correlation function should never end up here.. It should always have positive eigenvalues according to Dietrick and Newsam 1997 p. 1098."
@@ -722,24 +722,24 @@
         stop
     end select
 
-    !Make the circulance for columns
-    if (Ncol_mul > 2) then
+    !Make the circulance for rows
+    if (Nrow_mul > 2) then
         do lc = 1,Nlay_mul
-            do rc = 1,Nrow_mul
-                place = Ncol_mul+1
-                do i = Ncol_mul-1,2,-1
-                    d_XQR%SCC(place,rc,lc) = d_XQR%SCC(i,rc,lc)
+            do cc = 1,Ncol_mul
+                place = Nrow_mul+1
+                do i = Nrow_mul-1,2,-1
+                    d_XQR%SCC(place,cc,lc) = d_XQR%SCC(i,cc,lc)
                     place = place + 1
                 enddo
             enddo
         enddo
     endif
 
-    !Make the circulance for rows
-    if (Nrow_mul > 2) then
+    !Make the circulance for columns
+    if (Ncol_mul > 2) then
         do lc = 1,Nlay_mul
-            place = Nrow_mul+1
-            do i = Nrow_mul-1,2,-1
+            place = Ncol_mul+1
+            do i = Ncol_mul-1,2,-1
                 d_XQR%SCC(:,place,lc) = d_XQR%SCC(:,i,lc)
                 place = place + 1
             enddo
@@ -760,19 +760,19 @@
     !**************************************
     ! Reshape: vector to matrix
     !**************************************
-    subroutine Reshape_PCGA(vectorin, matrixout, NC, NR, NL)
+    subroutine Reshape_PCGA(vectorin, matrixout, NR, NC, NL)
 
     double precision,   intent(in)      :: vectorin(:) !in
     double precision,   intent(inout)   :: matrixout(:,:,:)
-    integer, 			intent(in) 	    :: NC, NR, NL
+    integer, 			intent(in) 	    :: NR, NC, NL
     integer :: i, j, place
 
     !Reshaping the elements of the vector into the matrix
     place = 1
     do j = 1,NL
-        do i = 1,NR
-            matrixout(:NC,i,j) = vectorin(place:place+NC-1)
-            place = place + NC
+        do i = 1,NC
+            matrixout(:NR,i,j) = vectorin(place:place+NR-1)
+            place = place + NR
         enddo
     enddo
 
@@ -781,19 +781,19 @@
     !**************************************
     ! Inverse reshape: matrix to vector
     !**************************************
-    subroutine IReshape_PCGA(vectorout, matrixin, NC, NR, NL)
+    subroutine IReshape_PCGA(vectorout, matrixin, NR, NC, NL)
 
     double precision,   intent(inout)   :: vectorout(:)
     double precision,   intent(in)      :: matrixin(:,:,:)
-    integer, 			intent(in) 	    :: NC, NR, NL
+    integer, 			intent(in) 	    :: NR, NC, NL
     integer :: i, j, place
 
     !Reshaping the elements of the matrix into the vector
     place = 1
     do j = 1,NL
-        do i = 1,NR
-            vectorout(place:place+NC-1) = matrixin(:NC,i,j)
-            place = place + NC
+        do i = 1,NC
+            vectorout(place:place+NR-1) = matrixin(:NR,i,j)
+            place = place + NR
         enddo
     enddo
 
@@ -802,22 +802,22 @@
     !**********************************************************************************
     ! Setup for the Fourier transformations and the inverse Fourier transformations
     !**********************************************************************************
-    subroutine setup_FFT(handle_FFT, handle_IFFT, NAC, NAR, NAL)
+    subroutine setup_FFT(handle_FFT, handle_IFFT, NAR, NAC, NAL)
 
     type(DFTI_DESCRIPTOR), intent(inout), pointer :: handle_FFT, handle_IFFT
-    integer, intent(in)   :: NAC, NAR, NAL
+    integer, intent(in)   :: NAR, NAC, NAL
     integer, dimension(3) :: L
 
     !Declair length of individual dimensions of the matrix which has to be fourier transformed
-    L = (/ NAC, NAR, NAL/)
+    L = (/ NAR, NAC, NAL/)
 
     !FFT setup
     status = DftiCreateDescriptor(handle_FFT, DFTI_DOUBLE, DFTI_COMPLEX, 3, L)          !Doule precission, complex values are used as in and output, 3 dimensions ,<dfti_length> = L describe the size of the 3 dimensions.
     status = DftiSetValue(handle_FFT, DFTI_COMPLEX_STORAGE,  DFTI_REAL_REAL)            !This can become less memory demanding by using DFTI_CONJUGATE_EVEN_STORAGE and DFTI_PACKED_FORMAT
     status = DftiSetValue(handle_FFT, DFTI_PLACEMENT, DFTI_INPLACE)                     !In and output is saved in the same variable
     !These are just the default settings:
-    !status = DftisetValue(handle_FFT,  DFTI_INPUT_STRIDES, (/0, 1, NAC, NAC*NAR/))     !Zero offset s0 = 0, data is continues in the first dimension s1 = 1, for the second dimension there are Ncol points between every data point in the matrix s2 = Ncol and Ncol*Nrow in the third dimension s3 = Ncol*Nrow.
-    !status = DftisetValue(handle_FFT,  DFTI_OUTPUT_STRIDES, (/0, 1, Ncol, Ncol*Nrow/)  !For in-place transforms ( DFTI_PLACEMENT=DFTI_INPLACE ), the configuration set by  DFTI_OUTPUT_STRIDES is ignored when the element types in the forward and backward domains are the same.
+    !status = DftisetValue(handle_FFT,  DFTI_INPUT_STRIDES, (/0, 1, NAR, NAR*NAC/))     !Zero offset s0 = 0, data is continues in the first dimension s1 = 1, for the second dimension there are Nrow points between every data point in the matrix s2 = Nrow and Nrow*Ncol in the third dimension s3 = Nrow*Ncol.
+    !status = DftisetValue(handle_FFT,  DFTI_OUTPUT_STRIDES, (/0, 1, Nrow, Nrow*Ncol/)  !For in-place transforms ( DFTI_PLACEMENT=DFTI_INPLACE ), the configuration set by  DFTI_OUTPUT_STRIDES is ignored when the element types in the forward and backward domains are the same.
     status = DftiCommitDescriptor(handle_FFT)                                           !Make the descriptor ready for the transformation
 
     !IFFT setup
@@ -825,8 +825,8 @@
     status = DftiSetValue(handle_IFFT, DFTI_COMPLEX_STORAGE,  DFTI_REAL_REAL)
     status = DftiSetValue(handle_IFFT, DFTI_PLACEMENT, DFTI_INPLACE)
     !These are just the default settings:
-    !status = DftisetValue(handle_IFFT,  DFTI_INPUT_STRIDES, (/0, 1, NAC, NAC*NAR/))    !Sero offset s0 = 0, data is continues in the first dimension s1 = 1, for the second dimension there are Ncol points between every data point in the matrix s2 = Ncol and Ncol*Nrow in the third dimension s3 = Ncol*Nrow.
-    !status = DftisetValue(handle_IFFT,  DFTI_OUTPUT_STRIDES, (/0, 1, Ncol, Ncol*Nrow/) !For in-place transforms ( DFTI_PLACEMENT=DFTI_INPLACE ), the configuration set by  DFTI_OUTPUT_STRIDES is ignored when the element types in the forward and backward domains are the same.
+    !status = DftisetValue(handle_IFFT,  DFTI_INPUT_STRIDES, (/0, 1, NAR, NAR*NAC/))    !Sero offset s0 = 0, data is continues in the first dimension s1 = 1, for the second dimension there are Nrow points between every data point in the matrix s2 = Nrow and Nrow*Ncol in the third dimension s3 = Ncol*Nrow.
+    !status = DftisetValue(handle_IFFT,  DFTI_OUTPUT_STRIDES, (/0, 1, Nrow, Nrow*Ncol/) !For in-place transforms ( DFTI_PLACEMENT=DFTI_INPLACE ), the configuration set by  DFTI_OUTPUT_STRIDES is ignored when the element types in the forward and backward domains are the same.
     status = DftiCommitDescriptor(handle_IFFT)                                          !Make the descriptor ready for the inverse transformation
 
     !Note: The scaling factor for both FFT and IFFT is 1.0 by default
@@ -835,31 +835,31 @@
     !**********************************************************************************************************************
     ! This function sample random values from a gaussian distribution with mean = 0 and variance = 1 and covariance = 0
     !**********************************************************************************************************************
-    subroutine sample_unit_normal_distribution(Q0_All, cv_A, d_XQR, p, NAC, NAR, NAL)
+    subroutine sample_unit_normal_distribution(Q0_All, cv_A, d_XQR, p, NAR, NAC, NAL)
 
     type(cv_algorithmic),  intent(inout)    :: cv_A
     type(Q0_compr),   intent(in),   pointer :: Q0_All(:)
     type(kernel_XQR), intent(inout)         :: d_XQR
-    integer,          intent(in)            :: p, NAC, NAR, NAL
+    integer,          intent(in)            :: p, NAR, NAC, NAL
     double precision, allocatable           :: mu(:), diagonal_covariance(:)
     integer                                 :: status
 
     !Mean value
-    allocate(mu(NAC*NAR*NAL))
+    allocate(mu(NAR*NAC*NAL))
     mu = 0.d0
 
     !Variance. Since diagonal_covariance only is a vector it is implicit assumed that the covariance is zero.
-    allocate(diagonal_covariance(NAC*NAR*NAL))
+    allocate(diagonal_covariance(NAR*NAC*NAL))
     diagonal_covariance = 1.d0
 
     !Matrix for saving random values
     if (associated(d_XQR%Z_sample_L)) deallocate(d_XQR%Z_sample_L)
-    allocate(d_XQR%Z_sample_L(NAC*NAR*NAL, Q0_All(p)%K_s))
+    allocate(d_XQR%Z_sample_L(NAR*NAC*NAL, Q0_All(p)%K_s))
     d_XQR%Z_sample_L = 0.d0
 
     !Sample random values
-    !status =  vdrnggaussianmv (  method=method_Gaussian ,  stream=stream_Gaussian ,  n=Q0_All(p)%K_s ,  r=d_XQR%Z_sample_L ,  dimen=NAC*NAR*NAL ,  mstorage=VSL_MATRIX_STORAGE_DIAGONAL ,  a=d_XQR%mu ,  t=Diagonal_covariance )
-    status = vdrnggaussianmv (  cv_A%method_Gaussian ,  cv_A%stream_Gaussian ,  Q0_All(p)%K_s ,  d_XQR%Z_sample_L ,  NAC*NAR*NAL ,  VSL_MATRIX_STORAGE_DIAGONAL ,  mu ,  Diagonal_covariance )
+    !status =  vdrnggaussianmv (  method=method_Gaussian ,  stream=stream_Gaussian ,  n=Q0_All(p)%K_s ,  r=d_XQR%Z_sample_L ,  dimen=NAR*NAC*NAL ,  mstorage=VSL_MATRIX_STORAGE_DIAGONAL ,  a=d_XQR%mu ,  t=Diagonal_covariance )
+    status = vdrnggaussianmv (  cv_A%method_Gaussian ,  cv_A%stream_Gaussian ,  Q0_All(p)%K_s ,  d_XQR%Z_sample_L ,  NAR*NAC*NAL ,  VSL_MATRIX_STORAGE_DIAGONAL ,  mu ,  Diagonal_covariance )
 
     deallocate(mu)
     deallocate(diagonal_covariance)

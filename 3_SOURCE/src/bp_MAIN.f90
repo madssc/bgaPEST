@@ -152,7 +152,7 @@
     bprunit = utl_nextunit()
     call bpc_openfile(bprunit,trim(trim(casename) // '.bpr'),1) ![1] at end indicates open with write access
 
-!--  READ INPUT FILE AND PERFORM ASSOCIATED ALLOCATIONS AND PARSING     
+    !--  READ INPUT FILE AND PERFORM ASSOCIATED ALLOCATIONS AND PARSING
     call bpr_read(errstruc,CTLFILE,cv_A, d_A, cv_PM, d_PM, cv_S, d_S, cv_PAR,Q0_All, d_PAR, &
         cv_OBS, d_OBS, d_MOD, cv_MIO, d_MIO, d_ANI,miostruc)
 
@@ -210,7 +210,7 @@
 
         write(6,'(1a1,A40,$)') char(13), "Normalize the drift matrix: In progress"
         call Normalize_X(d_XQR, cv_PAR)
-        write(6,'(1a1,A40,$)') char(13), "Normalize the drift matrix: Complete   "
+        write(6,'(1a1,A40,$)') char(13), "Normalize the drift matrix: Complete   " !Note: If char(13) is removed the next line can be removed as well
         write(6,*) " "
 
         !Settings for the random sampling in "PCGA_low_rank_app"
@@ -251,7 +251,7 @@
         if (cv_A%PCGA == 1) then !PCGA: Construct truncated U_z, C and Ap:
             write(6,'(1a1,A57,$)') char(13), "Construcing the parameter covariance matrix: In progress"
             call Low_rank_app(cv_A, cv_PAR, cv_S, d_ANI, d_PAR, d_S, d_XQR, Q0_All)
-            write(6,'(1a1,A57,$)') char(13), "Construcing the parameter covariance matrix: Complete   "
+            write(6,'(1a1,A57,$)') char(13), "Construcing the parameter covariance matrix: Complete   " !Note: If char(13) is removed the next line can be removed as well
             write(6,*) " "
             write(6,*) " "
             if (cv_A%eigenvalue_test == 1) exit !exit b_ind loop
